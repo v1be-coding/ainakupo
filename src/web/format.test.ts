@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { formatCost, formatDuration, formatInteger, formatScore } from "./format.js";
+import {
+  formatCost,
+  formatDuration,
+  formatInteger,
+  formatScore,
+  formatStarted,
+  formatStatus,
+} from "./format.js";
 
 describe("formatInteger", () => {
   it.each([
@@ -50,5 +57,26 @@ describe("formatScore", () => {
 
   it("writes no scores for null", () => {
     expect(formatScore(null)).toBe("no scores");
+  });
+});
+
+describe("formatStarted", () => {
+  it.each([
+    ["2026-11-19T14:03:07.000Z", "2026-11-19 14:03:07"],
+    ["2026-01-02T03:04:05.999Z", "2026-01-02 03:04:05"],
+    ["2026-11-19T23:30:00.000-02:00", "2026-11-20 01:30:00"],
+  ])("writes %s as %s", (startedAt, text) => {
+    expect(formatStarted(startedAt)).toBe(text);
+  });
+
+  it("shows text that isn't a date as is", () => {
+    expect(formatStarted("not a date")).toBe("not a date");
+  });
+});
+
+describe("formatStatus", () => {
+  it("writes OK and Error", () => {
+    expect(formatStatus("ok")).toBe("OK");
+    expect(formatStatus("error")).toBe("Error");
   });
 });
