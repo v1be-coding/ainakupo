@@ -1,6 +1,6 @@
 import { withRetry } from "@aws/aurora-dsql-drizzle";
 import { desc, eq } from "drizzle-orm";
-import { apiDb, type Db } from "./client.js";
+import { apiDb, type ApiDb as Db } from "./api-db.js";
 import { ingestKeys, traces, type KeyEnvironment } from "./schema.js";
 
 export type StoredKey = {

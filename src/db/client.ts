@@ -12,14 +12,3 @@ export function connect(user: string) {
     connection: { host, user, max: 1, maxLifetimeSeconds: MAX_CONNECTION_SECONDS },
   });
 }
-
-export type Db = ReturnType<typeof connect>;
-
-let apiConnection: Db | undefined;
-
-// The Lambda's connection, as the `api` role `grantAccess` maps to its IAM role. One per
-// Lambda instance, so it's reused across requests.
-export function apiDb(): Db {
-  apiConnection ??= connect("api");
-  return apiConnection;
-}
