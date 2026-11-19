@@ -19,6 +19,15 @@ on:
         description: true for a branch environment, which uploads traces and comments on the PR
         type: boolean
         required: true
+    # The test-episode's ingest keys (docs/agents/test-keys-setup.md). Only their
+    # hashes are in the repo. Passed by name, so this job gets no other secret.
+    secrets:
+      TEST_PRODUCTION_KEY:
+        description: test-episode's aik_prod_ key
+        required: false
+      TEST_PREVIEW_KEY:
+        description: test-episode's aik_prev_ key
+        required: false
 
 permissions: {} # the caller grants these
 
@@ -53,6 +62,8 @@ jobs:
           FROZEN_TRACES: ${{ inputs.branch_environment && 'uploaded' || 'none' }}
           # Acceptance tests run on branch environments only (Q29), in helpers/projects.ts.
           FROZEN_TARGET: ${{ inputs.branch_environment && 'branch' || 'production' }}
+          TEST_PRODUCTION_KEY: ${{ secrets.TEST_PRODUCTION_KEY }}
+          TEST_PREVIEW_KEY: ${{ secrets.TEST_PREVIEW_KEY }}
         run: npx playwright test
       - name: Add the retry report to the summary
         if: always() && hashFiles('frozen/reports/retry-report.md') != ''
