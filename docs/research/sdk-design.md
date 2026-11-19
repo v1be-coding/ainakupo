@@ -60,28 +60,31 @@ says **not confirmed**. The vendor flush patterns in
 
 **How comparable SDKs shape init, send and flush:**
 
-| SDK | Init | Send | Flush or shutdown | Provider wrapper |
-|---|---|---|---|---|
-| Langfuse JS | `LangfuseSpanProcessor` registered with OTel `NodeSDK` ([SDK](https://langfuse.com/docs/observability/sdk/overview)) | spans or observations | "Shutdown flushes events and is required for short-lived applications" (same page) | `@langfuse/openai` (same page). Anthropic: not on that page |
-| LangSmith JS | `new Client()` plus `traceable` ([serverless](https://docs.langchain.com/langsmith/serverless-environments)) | background batches | `await client.awaitPendingTraceBatches()`, or `flush()` with `manualFlushMode` (same page) | not checked |
-| Braintrust | `initLogger({ projectName, apiKey?, asyncFlush })` factory ([TS install](https://docs.braintrust.dev/sdks/typescript/install-and-instrument.md)) | spans | `asyncFlush: false` plus `await logger.flush()` in `finally` (same page) | `wrapOpenAI` (same page) |
-| Helicone async | no SDK on the docs page. Raw `POST …/custom/v1/log` with `Authorization: Bearer` ([manual logger](https://docs.helicone.ai/getting-started/integration-method/manual-logger-curl.md)) | one HTTP call | n/a | n/a |
-| PostHog Node | `new PostHog(apiKey, { host })` ([Node docs](https://posthog.com/docs/libraries/node)) | queued; `captureImmediate` returns a Promise | `flush()` per request, raced against the remaining invocation time "and keep 100 ms to return"; `shutdown()` before exit (same page) | `captureAiImmediate` for serverless (same page) |
-| Sentry Lambda | layer or `wrapHandler` | background queue | `shutdownTimeout` (2000 ms default). The layer extension "keeps running across Lambda's freeze/thaw boundary" ([options](https://docs.sentry.io/platforms/javascript/guides/aws-lambda/configuration/options/)) | n/a |
-| OTel JS | `NodeSDK` plus processors. Docs recommend batching ([exporters](https://opentelemetry.io/docs/languages/js/exporters/)) | export | `forceFlush` and `shutdown`: not covered on that page (**not confirmed**) | instrumentations |
+| SDK            | Init                                                                                                                                                                                  | Send                                         | Flush or shutdown                                                                                                                                                                                               | Provider wrapper                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Langfuse JS    | `LangfuseSpanProcessor` registered with OTel `NodeSDK` ([SDK](https://langfuse.com/docs/observability/sdk/overview))                                                                  | spans or observations                        | "Shutdown flushes events and is required for short-lived applications" (same page)                                                                                                                              | `@langfuse/openai` (same page). Anthropic: not on that page |
+| LangSmith JS   | `new Client()` plus `traceable` ([serverless](https://docs.langchain.com/langsmith/serverless-environments))                                                                          | background batches                           | `await client.awaitPendingTraceBatches()`, or `flush()` with `manualFlushMode` (same page)                                                                                                                      | not checked                                                 |
+| Braintrust     | `initLogger({ projectName, apiKey?, asyncFlush })` factory ([TS install](https://docs.braintrust.dev/sdks/typescript/install-and-instrument.md))                                      | spans                                        | `asyncFlush: false` plus `await logger.flush()` in `finally` (same page)                                                                                                                                        | `wrapOpenAI` (same page)                                    |
+| Helicone async | no SDK on the docs page. Raw `POST …/custom/v1/log` with `Authorization: Bearer` ([manual logger](https://docs.helicone.ai/getting-started/integration-method/manual-logger-curl.md)) | one HTTP call                                | n/a                                                                                                                                                                                                             | n/a                                                         |
+| PostHog Node   | `new PostHog(apiKey, { host })` ([Node docs](https://posthog.com/docs/libraries/node))                                                                                                | queued; `captureImmediate` returns a Promise | `flush()` per request, raced against the remaining invocation time "and keep 100 ms to return"; `shutdown()` before exit (same page)                                                                            | `captureAiImmediate` for serverless (same page)             |
+| Sentry Lambda  | layer or `wrapHandler`                                                                                                                                                                | background queue                             | `shutdownTimeout` (2000 ms default). The layer extension "keeps running across Lambda's freeze/thaw boundary" ([options](https://docs.sentry.io/platforms/javascript/guides/aws-lambda/configuration/options/)) | n/a                                                         |
+| OTel JS        | `NodeSDK` plus processors. Docs recommend batching ([exporters](https://opentelemetry.io/docs/languages/js/exporters/))                                                               | export                                       | `forceFlush` and `shutdown`: not covered on that page (**not confirmed**)                                                                                                                                       | instrumentations                                            |
 
 **Takeaways:**
+
 - Every SDK that batches has to explain flushing, and PostHog's own advice races the flush against the
   invocation deadline. Senders here make a handful of calls per request, so batching buys nothing.
 - PostHog's "immediate" variant (`captureImmediate`) is the closest match to the draft's `send`.
 
 **Factory, class or function:**
+
 - A plain `send(endpoint, key, trace)` makes every call site repeat the secret.
 - A class stores the key on `this`, where `console.log`, `JSON.stringify` and error reporters will find it.
 - A factory closure keeps the key private and validates config once. **Keep the factory.**
 
 **Result object, throw or callback.** "Never throw into the host app" rules out throwing. A result object
 is easy to log and assert in tests.
+
 - `send()` must never reject, so callers don't need `try`.
 - Make the result discriminated, and carry the server's fields, so tests and logs can see what happened
   (see §9).
@@ -89,7 +92,7 @@ is easy to log and assert in tests.
   Init phase. Return a client whose `send` resolves `{ ok: false, reason: "invalid_config" }`.
 
 **Anthropic helper.** A wrapper that holds the Anthropic client would break the rule that the SDK never
-sees provider credentials, so **don't wrap the client.** A *pure* mapper is different. It's worth
+sees provider credentials, so **don't wrap the client.** A _pure_ mapper is different. It's worth
 considering because Anthropic's `usage.input_tokens` **excludes** cached tokens:
 `total = cache_read_input_tokens + cache_creation_input_tokens + input_tokens`
 ([prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)). OTel's
@@ -97,6 +100,7 @@ considering because Anthropic's `usage.input_tokens` **excludes** cached tokens:
 its own way.
 
 **Recommendation:**
+
 - v1 ships no wrapper.
 - The spec pins `inputTokens` as the total including cache.
 - Optionally, add `fromAnthropicUsage(usage) → { inputTokens, outputTokens }`, which is about 5 lines and
@@ -128,14 +132,15 @@ its own way.
 
 **Per-call await, fire-and-forget or batch:**
 
-| Pattern | Data loss on Lambda | Latency added | Complexity |
-|---|---|---|---|
-| Fire-and-forget | Yes (freeze or recycle) | none | low, but wrong |
-| Batch plus `flush()` | Only if the caller forgets `flush` | one request per flush | needs a queue, `flush`, and docs |
-| **Await each `send`** | No, unless the send times out | one HTTPS round trip per trace | lowest |
-| Collect promises, then `await Promise.all` before returning | No | one round trip in total, run in parallel | the caller's choice, and needs no SDK feature |
+| Pattern                                                     | Data loss on Lambda                | Latency added                            | Complexity                                    |
+| ----------------------------------------------------------- | ---------------------------------- | ---------------------------------------- | --------------------------------------------- |
+| Fire-and-forget                                             | Yes (freeze or recycle)            | none                                     | low, but wrong                                |
+| Batch plus `flush()`                                        | Only if the caller forgets `flush` | one request per flush                    | needs a queue, `flush`, and docs              |
+| **Await each `send`**                                       | No, unless the send times out      | one HTTPS round trip per trace           | lowest                                        |
+| Collect promises, then `await Promise.all` before returning | No                                 | one round trip in total, run in parallel | the caller's choice, and needs no SDK feature |
 
 **Latency cost:**
+
 - One HTTPS POST. On a cold socket that includes DNS, TCP and TLS. undici's `connectTimeout` defaults to
   10 s and `keepAliveTimeout` to 4 s
   ([undici Client](https://raw.githubusercontent.com/nodejs/undici/main/docs/docs/api/Client.md)), so a
@@ -161,14 +166,14 @@ say "await it before your handler returns". Offer `timeoutMs`, so a caller can c
 
 **What Node 24's fetch throws.** Local probe on Node v24.22.2 / undici 7.30.1, in the scratchpad:
 
-| Case | Rejection |
-|---|---|
-| Connection refused | `TypeError: fetch failed`, with a `cause` |
-| DNS failure | `TypeError: fetch failed`, with `cause.code = ENOTFOUND` |
-| `AbortSignal.timeout(300)` before headers | `DOMException`, `name: "TimeoutError"`, after about 304 ms |
-| The same timeout while reading the body | `DOMException`, `TimeoutError`. **The signal covers the body too** |
-| `redirect: "error"` and a 307 response | `TypeError: fetch failed` |
-| Invalid URL | `TypeError: Failed to parse URL …`, with `cause.code = ERR_INVALID_URL` |
+| Case                                      | Rejection                                                               |
+| ----------------------------------------- | ----------------------------------------------------------------------- |
+| Connection refused                        | `TypeError: fetch failed`, with a `cause`                               |
+| DNS failure                               | `TypeError: fetch failed`, with `cause.code = ENOTFOUND`                |
+| `AbortSignal.timeout(300)` before headers | `DOMException`, `name: "TimeoutError"`, after about 304 ms              |
+| The same timeout while reading the body   | `DOMException`, `TimeoutError`. **The signal covers the body too**      |
+| `redirect: "error"` and a 307 response    | `TypeError: fetch failed`                                               |
+| Invalid URL                               | `TypeError: Failed to parse URL …`, with `cause.code = ERR_INVALID_URL` |
 
 These match the specs. The DOM spec aborts with "a new "TimeoutError" DOMException"
 ([DOM](https://dom.spec.whatwg.org/#dom-abortsignal-timeout)). Redirect mode `error` returns "a network
@@ -177,6 +182,7 @@ undici-based and has been stable since v21 ([globals](https://nodejs.org/api/glo
 `AbortSignal.any` (v20.3+) can combine a caller's signal with the timeout (same page).
 
 **Implications for the SDK:**
+
 - Map `TimeoutError` to `"timeout"`, and any other rejection to `"network"`.
 - Read the body inside the same `try` as the fetch, under the same signal.
 - Never surface `err.message` verbatim if it could hold the URL. Ingest URLs aren't secret, but keep the
@@ -187,6 +193,7 @@ undici-based and has been stable since v21 ([globals](https://nodejs.org/api/glo
   is the one failure a retry cheaply fixes.
 
 **Retries:**
+
 - OTLP retries 429/502/503/504 with backoff and `Retry-After`, never 400, all bounded by the whole export
   timeout ([OTLP](https://opentelemetry.io/docs/specs/otlp/),
   [exporter](https://opentelemetry.io/docs/specs/otel/protocol/exporter/)). OTLP exporters run in the
@@ -199,6 +206,7 @@ undici-based and has been stable since v21 ([globals](https://nodejs.org/api/glo
 
 **Timeout value:** **2000 ms by default**, configurable with `timeoutMs`, clamped to roughly
 100–10,000 ms. Reasons:
+
 - It leaves 1 s of Lambda's default 3 s timeout for the host's own work.
 - The OTel default of 10 s ([exporter spec](https://opentelemetry.io/docs/specs/otel/protocol/exporter/))
   is for background exporters.
@@ -209,6 +217,7 @@ undici-based and has been stable since v21 ([globals](https://nodejs.org/api/glo
 ## 5. IDs and `startedAt` (Q4)
 
 **What the sources say:**
+
 - LangSmith: "We recommend using **UUID v7** for run IDs", because it "preserves correct time-ordering"
   ([trace with API](https://docs.langchain.com/langsmith/trace-with-api)).
 - RFC 9562: time-ordered UUIDs "benefit from greater database-index locality", and implementations "SHOULD
@@ -219,6 +228,7 @@ undici-based and has been stable since v21 ([globals](https://nodejs.org/api/glo
   24.22.2 (local probe). Which Node 24 minor Lambda's `nodejs24.x` runtime ships: **not confirmed**.
 
 **Recommendation:**
+
 - The SDK generates `id` when it's omitted, using `randomUUIDv7` if it's a function, else `randomUUID`.
   Always return the id in the result, even on failure, so callers can log it or retry it themselves.
 - Server: accept any RFC 9562 UUID. Don't require v7.
@@ -249,18 +259,18 @@ undici-based and has been stable since v21 ([globals](https://nodejs.org/api/glo
 ```ts
 export type TraceStatus = "ok" | "error";
 export interface TraceInput {
-  id?: string;                 // UUID; generated when omitted
+  id?: string; // UUID; generated when omitted
   runId?: string;
-  provider: string;            // e.g. "anthropic"
+  provider: string; // e.g. "anthropic"
   model: string;
   feature: string;
-  inputTokens: number;         // total input incl. cached tokens (spec to pin)
+  inputTokens: number; // total input incl. cached tokens (spec to pin)
   outputTokens: number;
-  startedAt: Date | string;    // ISO 8601 when a string
+  startedAt: Date | string; // ISO 8601 when a string
   durationMs: number;
-  costUsd?: number | null;     // null/omitted = unknown
+  costUsd?: number | null; // null/omitted = unknown
   status: TraceStatus;
-  prompt?: string;             // trace text, opt-in
+  prompt?: string; // trace text, opt-in
   response?: string;
 }
 ```
@@ -270,6 +280,7 @@ export interface TraceInput {
 ## 7. Packaging without npm (Q6)
 
 **Evidence:**
+
 - **Git dependencies.** npm supports `git+https://…#<commit-ish>` and `#semver:<range>`. With neither,
   "the default branch is used". The docs say nothing about subdirectories
   ([package.json](https://docs.npmjs.com/cli/v11/configuring-npm/package-json)).
@@ -279,7 +290,7 @@ export interface TraceInput {
 - **Subdirectories.**
   - The 2013 maintainer position was "There's no plans to do this … npm assumes that the git repo is the
     package" ([npm/npm#2974](https://github.com/npm/npm/issues/2974)).
-  - RFC 0010 added only `repository.directory` *metadata*
+  - RFC 0010 added only `repository.directory` _metadata_
     ([RFC 0010](https://github.com/npm/rfcs/blob/latest/implemented/0010-monorepo-subdirectory-declaration.md)).
   - npm-package-arg parses `#<ref>::path:<dir>` into `gitSubdir`
     ([npa.js](https://raw.githubusercontent.com/npm/npm-package-arg/main/lib/npa.js)).
@@ -289,8 +300,8 @@ export interface TraceInput {
   - It is **undocumented**, and **broken in local tests**:
     `npm install github:npm/cli#path:workspaces/libnpmversion` and the `git+https://…cli.git#path:…` form
     (npm 11.19.1, with `--ignore-scripts`) both installed `node_modules/libnpmversion` containing the
-    **root** `npm@12.2.3` package. `npm pack --dry-run` showed the subdirectory's *name* with the root's
-    *files*. Untested: whether it works without `--ignore-scripts`, or when the subdirectory has a `prepare`
+    **root** `npm@12.2.3` package. `npm pack --dry-run` showed the subdirectory's _name_ with the root's
+    _files_. Untested: whether it works without `--ignore-scripts`, or when the subdirectory has a `prepare`
     script. The cause is **not confirmed**.
 - **Tarball URLs.** "You may specify a tarball URL in place of a version range"
   ([package.json](https://docs.npmjs.com/cli/v11/configuring-npm/package-json)). It must be `http(s)://`
@@ -300,18 +311,19 @@ export interface TraceInput {
 
 **Options:**
 
-| Option | Works with a subfolder? | Pros | Cons |
-|---|---|---|---|
-| `github:v1be-coding/ainakupo` (repo root) | n/a. It installs the *app*: root `prepare: husky` runs, and every dependency and devDependency is installed | none | wrong package, slow, runs app scripts |
-| `#path:sdk` | **No** in local tests | one repo, one command | undocumented; installed the root files; npm ≥ 11.10 only |
-| Separate `ainakupo-sdk` repo plus `github:…#semver:^1` tags | Yes | documented git-dependency path; tags give versions | a new repo is a `v1be-infra` or user step; types shared across repos drift; needs `prepare` or a committed `dist/` |
-| Committed `dist/` plus a git dependency | Only in a separate repo | no build at install | built files in git; needs a CI drift check |
-| **Release asset `.tgz`** (`npm pack` in `sdk/`, `gh release create sdk-vX.Y.Z <tgz>`) | **Yes** | documented form; immutable per version; lockfile records URL and integrity; no install-time scripts | a release per version (a GitHub write, which the spec must allow); the built artefact isn't reviewed as source; redirect behaviour to test |
-| Tarball committed in the repo, served by a raw URL | Yes | no releases | binary in git; raw URLs are odd for deps |
-| npm workspaces | Only *inside* this repo | the app and the frozen tests can import `sdk/` | doesn't help other repos install it |
-| Vendor `sdk/src/index.ts` into each sender | Yes | no install machinery; zero deps; one file | copies drift; no update path |
+| Option                                                                                | Works with a subfolder?                                                                                     | Pros                                                                                                | Cons                                                                                                                                       |
+| ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `github:v1be-coding/ainakupo` (repo root)                                             | n/a. It installs the _app_: root `prepare: husky` runs, and every dependency and devDependency is installed | none                                                                                                | wrong package, slow, runs app scripts                                                                                                      |
+| `#path:sdk`                                                                           | **No** in local tests                                                                                       | one repo, one command                                                                               | undocumented; installed the root files; npm ≥ 11.10 only                                                                                   |
+| Separate `ainakupo-sdk` repo plus `github:…#semver:^1` tags                           | Yes                                                                                                         | documented git-dependency path; tags give versions                                                  | a new repo is a `v1be-infra` or user step; types shared across repos drift; needs `prepare` or a committed `dist/`                         |
+| Committed `dist/` plus a git dependency                                               | Only in a separate repo                                                                                     | no build at install                                                                                 | built files in git; needs a CI drift check                                                                                                 |
+| **Release asset `.tgz`** (`npm pack` in `sdk/`, `gh release create sdk-vX.Y.Z <tgz>`) | **Yes**                                                                                                     | documented form; immutable per version; lockfile records URL and integrity; no install-time scripts | a release per version (a GitHub write, which the spec must allow); the built artefact isn't reviewed as source; redirect behaviour to test |
+| Tarball committed in the repo, served by a raw URL                                    | Yes                                                                                                         | no releases                                                                                         | binary in git; raw URLs are odd for deps                                                                                                   |
+| npm workspaces                                                                        | Only _inside_ this repo                                                                                     | the app and the frozen tests can import `sdk/`                                                      | doesn't help other repos install it                                                                                                        |
+| Vendor `sdk/src/index.ts` into each sender                                            | Yes                                                                                                         | no install machinery; zero deps; one file                                                           | copies drift; no update path                                                                                                               |
 
 **Monorepo and shared types:**
+
 - Keep the SDK in `sdk/`, with its own `package.json` (`name: "@v1be-coding/ainakupo-sdk"`, `private: true`
   so it can't be published by accident, and `files: ["dist"]`) and its own `tsconfig`.
 - The SDK owns the wire types. The app's ingest handler imports them with a type-only relative import from
@@ -320,6 +332,7 @@ export interface TraceInput {
 - knip and ESLint will need `sdk/` entries (**not confirmed** against this repo's knip config).
 
 **Recommendation:**
+
 - A release `.tgz`.
 - Install command:
   `npm install https://github.com/v1be-coding/ainakupo/releases/download/sdk-v1.0.0/ainakupo-sdk-1.0.0.tgz`
@@ -360,6 +373,7 @@ export interface TraceInput {
 ## 9. Testing (Q8)
 
 **Unit tests** (vitest, in this repo):
+
 - Inject `fetch` through a hidden option, for example `createAInakupo({ …, fetch })`, to test the status
   mapping table quickly.
 - Use a local `node:http` server for the behaviours a mock can't reproduce: a real `AbortSignal.timeout`
@@ -374,18 +388,19 @@ export interface TraceInput {
 
 **Frozen acceptance tests** (against the live branch environment):
 
-| Check | Expect |
-|---|---|
-| A valid trace with the test ingest key | `{ ok: true, status: 201, id, hasText: false, textTruncated: false }`, and the trace then appears in the read API or dashboard |
-| The same id resent with changed tokens | `ok: true, status: 200`. The stored trace shows the new values |
-| `prompt` longer than 8192 chars | `ok: true, hasText: true, textTruncated: true` |
-| A wrong ingest key | `{ ok: false, reason: "invalid_key", status: 401 }` |
-| A negative `inputTokens` (bypassing the types) | `{ ok: false, reason: "invalid_trace", field: "inputTokens" }` |
-| A non-HTTPS public endpoint, or an empty key | `{ ok: false, reason: "invalid_config" }`, with no request made |
-| An unreachable endpoint (`http://127.0.0.1:1`) | `{ ok: false, reason: "network" }`. It resolves, doesn't throw |
-| The response body and result never contain the key | string check |
+| Check                                              | Expect                                                                                                                         |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| A valid trace with the test ingest key             | `{ ok: true, status: 201, id, hasText: false, textTruncated: false }`, and the trace then appears in the read API or dashboard |
+| The same id resent with changed tokens             | `ok: true, status: 200`. The stored trace shows the new values                                                                 |
+| `prompt` longer than 8192 chars                    | `ok: true, hasText: true, textTruncated: true`                                                                                 |
+| A wrong ingest key                                 | `{ ok: false, reason: "invalid_key", status: 401 }`                                                                            |
+| A negative `inputTokens` (bypassing the types)     | `{ ok: false, reason: "invalid_trace", field: "inputTokens" }`                                                                 |
+| A non-HTTPS public endpoint, or an empty key       | `{ ok: false, reason: "invalid_config" }`, with no request made                                                                |
+| An unreachable endpoint (`http://127.0.0.1:1`)     | `{ ok: false, reason: "network" }`. It resolves, doesn't throw                                                                 |
+| The response body and result never contain the key | string check                                                                                                                   |
 
 **Leave out of the frozen tests:**
+
 - 429 bursts. They take 61 sends and pollute the shared key's window, so test rate limiting server-side
   with its own key if at all.
 - Exact timeout timing.
@@ -426,33 +441,33 @@ export interface TraceInput {
 ```ts
 // @v1be-coding/ainakupo-sdk  (sdk/src/index.ts)
 export interface AInakupoOptions {
-  endpoint: string;      // base URL, e.g. "https://ainakupo.emilianocasijr.com"; no default
-  ingestKey: string;     // never read from env
-  timeoutMs?: number;    // default 2000, clamped to [100, 10000]; covers the whole request
+  endpoint: string; // base URL, e.g. "https://ainakupo.emilianocasijr.com"; no default
+  ingestKey: string; // never read from env
+  timeoutMs?: number; // default 2000, clamped to [100, 10000]; covers the whole request
 }
 
 export type SendResult =
   | { ok: true; id: string; status: 200 | 201; hasText: boolean; textTruncated: boolean }
   | {
       ok: false;
-      id: string | null;          // null only for invalid_config before an id exists
+      id: string | null; // null only for invalid_config before an id exists
       reason: FailureReason;
-      status?: number;            // HTTP status when a response arrived
-      field?: string;             // for invalid_trace
+      status?: number; // HTTP status when a response arrived
+      field?: string; // for invalid_trace
       retryAfterSeconds?: number; // for rate limits, informational only
     };
 
 export type FailureReason =
-  | "invalid_config"   // bad endpoint/key/options; no request made
-  | "invalid_trace"    // 400
-  | "invalid_key"      // 401
-  | "trace_conflict"   // 409
+  | "invalid_config" // bad endpoint/key/options; no request made
+  | "invalid_trace" // 400
+  | "invalid_key" // 401
+  | "trace_conflict" // 409
   | "key_rate_limited" // 429
-  | "rate_limited"     // 429
-  | "server_error"     // 5xx
+  | "rate_limited" // 429
+  | "server_error" // 5xx
   | "unexpected_response" // any other status, or unparseable body
-  | "timeout"          // AbortSignal.timeout fired
-  | "network";         // fetch rejected otherwise (DNS, refused, reset, redirect)
+  | "timeout" // AbortSignal.timeout fired
+  | "network"; // fetch rejected otherwise (DNS, refused, reset, redirect)
 
 export interface AInakupo {
   send(trace: TraceInput): Promise<SendResult>; // never rejects
@@ -468,20 +483,20 @@ allowlisted body with the `id` filled in and `startedAt` as ISO.
 
 ### Behaviour table
 
-| Outcome | Result |
-|---|---|
-| Config invalid (non-HTTPS public URL, userinfo, empty or provider-shaped key, bad `timeoutMs`) | `{ ok:false, reason:"invalid_config", id }`. No fetch |
-| 201 `{id, hasText, textTruncated}` | `{ ok:true, status:201, id, hasText, textTruncated }` |
-| 200 (idempotent replace) | `{ ok:true, status:200, … }` |
-| 400 `invalid_trace` + `field` | `{ ok:false, reason:"invalid_trace", status:400, field }` |
-| 401 `invalid_key` | `{ ok:false, reason:"invalid_key", status:401 }` |
-| 409 `trace_conflict` | `{ ok:false, reason:"trace_conflict", status:409 }` |
-| 429 `key_rate_limited` / `rate_limited` | the same `reason`, `status:429`, `retryAfterSeconds` from `retry-after`. **No retry** |
-| 5xx | `{ ok:false, reason:"server_error", status }`. No retry |
-| Any other status, or a 2xx with a body that won't parse | `{ ok:false, reason:"unexpected_response", status }` |
-| `TimeoutError` (headers or body) | `{ ok:false, reason:"timeout" }` |
-| Other fetch rejection, including a redirect | one immediate retry if time remains (optional, see §4), then `{ ok:false, reason:"network" }` |
-| Anything thrown inside the SDK | caught, and becomes `"network"` or `"unexpected_response"`. Never propagates |
+| Outcome                                                                                        | Result                                                                                        |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Config invalid (non-HTTPS public URL, userinfo, empty or provider-shaped key, bad `timeoutMs`) | `{ ok:false, reason:"invalid_config", id }`. No fetch                                         |
+| 201 `{id, hasText, textTruncated}`                                                             | `{ ok:true, status:201, id, hasText, textTruncated }`                                         |
+| 200 (idempotent replace)                                                                       | `{ ok:true, status:200, … }`                                                                  |
+| 400 `invalid_trace` + `field`                                                                  | `{ ok:false, reason:"invalid_trace", status:400, field }`                                     |
+| 401 `invalid_key`                                                                              | `{ ok:false, reason:"invalid_key", status:401 }`                                              |
+| 409 `trace_conflict`                                                                           | `{ ok:false, reason:"trace_conflict", status:409 }`                                           |
+| 429 `key_rate_limited` / `rate_limited`                                                        | the same `reason`, `status:429`, `retryAfterSeconds` from `retry-after`. **No retry**         |
+| 5xx                                                                                            | `{ ok:false, reason:"server_error", status }`. No retry                                       |
+| Any other status, or a 2xx with a body that won't parse                                        | `{ ok:false, reason:"unexpected_response", status }`                                          |
+| `TimeoutError` (headers or body)                                                               | `{ ok:false, reason:"timeout" }`                                                              |
+| Other fetch rejection, including a redirect                                                    | one immediate retry if time remains (optional, see §4), then `{ ok:false, reason:"network" }` |
+| Anything thrown inside the SDK                                                                 | caught, and becomes `"network"` or `"unexpected_response"`. Never propagates                  |
 
 Every result carries `id` (§5).
 

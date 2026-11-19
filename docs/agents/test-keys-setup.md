@@ -24,12 +24,14 @@ The frozen tests send traces as a fake sending episode, `test-episode`, which ha
      - `deploy-target.yml`: pass the two secrets **by name** at the `verify:` call (`.github/workflows/deploy-target.yml:188-197`). Don't use `secrets: inherit` there, because it would also hand the frozen tests `PORTFOLIO_ACCOUNT_ID` and `INFRACOST_API_KEY`, and the verify job is deliberately kept free of AWS access.
 
      Acceptance tests run only on branch environments (`FROZEN_TARGET`), so production's run doesn't need the keys, but passing them there does no harm.
+
    - **The seed step's target needs no change.** `deploy-target.yml:30` already sets `TARGET: ${{ inputs.environment }}` for the whole workflow. The run's seed code will skip `test-episode` when `TARGET` is `production`.
 4. **Check (user):** `gh secret list --repo v1be-coding/ainakupo` shows both names. The App gets a 403 on that command, so the user runs it. The workflow change is merged to `main` before `/acceptance`.
 
 ## Not part of this Setup
 
 These are done by the run, from the spec:
+
 - the seed code that skips `test-episode` on production
 - the server refusing `test-episode` keys on production as a backup
 - the `aik_` rule in `.secretlintrc.json`

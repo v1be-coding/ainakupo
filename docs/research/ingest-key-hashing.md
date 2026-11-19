@@ -8,25 +8,25 @@ Where a source didn't answer, this note says **not confirmed**. Inferences are l
 
 ## 1. Summary
 
-- **Plain SHA-256 is enough for a 256-bit random key.** NIST SP 800-63B-4 requires a salted *password hashing
-  scheme* only for look-up secrets below 112 bits; above that, "an approved hashing function" suffices
+- **Plain SHA-256 is enough for a 256-bit random key.** NIST SP 800-63B-4 requires a salted _password hashing
+  scheme_ only for look-up secrets below 112 bits; above that, "an approved hashing function" suffices
   ([NIST 800-63B-4 §3.1.2.2](https://pages.nist.gov/800-63-4/sp800-63b.html)). OWASP's "SHA-256 is not suitable"
   warning is about passwords, and the cheat sheet says nothing about random API keys
   ([OWASP Password Storage](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)).
 - **Real key managers do exactly this.** Unkey: "hashes the full key string with SHA-256 … There's no salt"
-  ([Unkey](https://www.unkey.com/docs/security/overview)). Langfuse moved *from* bcrypt *to* a fast SHA-256 hash
+  ([Unkey](https://www.unkey.com/docs/security/overview)). Langfuse moved _from_ bcrypt _to_ a fast SHA-256 hash
   looked up on a unique column ([apiKeys.ts](https://github.com/langfuse/langfuse/blob/main/packages/shared/src/server/auth/apiKeys.ts),
   [apiKeyRepository.ts](https://github.com/langfuse/langfuse/blob/main/web/src/features/apiKey/apiKeyRepository.ts)).
 - **bcrypt/scrypt/argon2 are the wrong tool here.** They exist to slow guessing of low-entropy input; on a Lambda
   hot path they add tens of ms per request with no gain when the input is 256 random bits (inference;
   Langfuse's migration away from bcrypt for this reason is the closest primary evidence).
 - **A pepper (HMAC) is optional defence in depth,** and buys almost nothing for 256-bit keys. NIST puts the
-  keyed-hash SHOULD on *passwords* (§3.1.1.2), not look-up secrets. GitLab and Langfuse both mix in a server
+  keyed-hash SHOULD on _passwords_ (§3.1.1.2), not look-up secrets. GitLab and Langfuse both mix in a server
   secret; Unkey doesn't.
 - **Publishing the SHA-256 of a 256-bit random key is cryptographically safe.** SHA-256 preimage resistance is
   256 bits ([NIST hash functions](https://csrc.nist.gov/projects/hash-functions#security-strengths)). The real
   risks are elsewhere: a low-entropy test key, any code path that accepts the hash as a credential, and the test
-  key being *valid data* in production.
+  key being _valid data_ in production.
 - **It's not common practice, but it's not flagged either.** No primary source recommends or forbids it; the
   common OSS pattern is synthetic plaintext dev keys hashed at seed time (Langfuse). No secretlint rule and no
   GitHub secret-scanning pattern matches a 64-char hex hash.
@@ -71,13 +71,13 @@ explicit primary statement).
 
 **Real implementations:**
 
-| System | Construction | Source |
-|---|---|---|
-| Unkey | `base64(sha256(fullKey))`, no salt; verify = hash and compare | [Unkey security](https://www.unkey.com/docs/security/overview) |
-| Langfuse | `sha256(key ‖ hex(sha256(SALT)))` hex, `SALT` from env; unique column, `findByFastHash`. Legacy bcrypt (cost 11) kept only for old keys | [apiKeys.ts](https://github.com/langfuse/langfuse/blob/main/packages/shared/src/server/auth/apiKeys.ts), [schema.prisma](https://github.com/langfuse/langfuse/blob/main/packages/shared/prisma/schema.prisma) |
-| GitLab | `Digest::SHA256.base64digest("#{value}#{salt}")`, salt = server secret from `db_key_base` | [crypto_helper.rb](https://github.com/gitlabhq/gitlabhq/blob/master/lib/gitlab/crypto_helper.rb) |
-| Supabase | Internal storage **not confirmed**; tells users to log "a SHA256 hash of it instead" of a key | [Supabase API keys](https://supabase.com/docs/guides/api/api-keys) |
-| GitHub, Stripe | Internal storage **not confirmed**; both show a key once and can't reveal it again (Stripe, for keys you create) | [Stripe keys](https://docs.stripe.com/keys) |
+| System         | Construction                                                                                                                            | Source                                                                                                                                                                                                        |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unkey          | `base64(sha256(fullKey))`, no salt; verify = hash and compare                                                                           | [Unkey security](https://www.unkey.com/docs/security/overview)                                                                                                                                                |
+| Langfuse       | `sha256(key ‖ hex(sha256(SALT)))` hex, `SALT` from env; unique column, `findByFastHash`. Legacy bcrypt (cost 11) kept only for old keys | [apiKeys.ts](https://github.com/langfuse/langfuse/blob/main/packages/shared/src/server/auth/apiKeys.ts), [schema.prisma](https://github.com/langfuse/langfuse/blob/main/packages/shared/prisma/schema.prisma) |
+| GitLab         | `Digest::SHA256.base64digest("#{value}#{salt}")`, salt = server secret from `db_key_base`                                               | [crypto_helper.rb](https://github.com/gitlabhq/gitlabhq/blob/master/lib/gitlab/crypto_helper.rb)                                                                                                              |
+| Supabase       | Internal storage **not confirmed**; tells users to log "a SHA256 hash of it instead" of a key                                           | [Supabase API keys](https://supabase.com/docs/guides/api/api-keys)                                                                                                                                            |
+| GitHub, Stripe | Internal storage **not confirmed**; both show a key once and can't reveal it again (Stripe, for keys you create)                        | [Stripe keys](https://docs.stripe.com/keys)                                                                                                                                                                   |
 
 Langfuse and GitLab use concatenation with a server secret, not HMAC. With SHA-256 and a fixed-length secret
 key that's acceptable in practice, but HMAC is the standard keyed construction (inference; OWASP names HMAC).
@@ -86,7 +86,7 @@ key that's acceptable in practice, but HMAC is the standard keyed construction (
 "leaks timing information due to the way strings are compared in database operations", and fixes it with a
 split `selector:validator` token where the validator is stored as SHA-256 and compared with `hash_equals()`
 ([Paragon IE](https://paragonie.com/blog/2015/04/secure-authentication-php-with-long-term-persistence)). When the
-lookup key is the *hash* of the presented key, a timing leak reveals at most bytes of a hash the attacker can't
+lookup key is the _hash_ of the presented key, a timing leak reveals at most bytes of a hash the attacker can't
 steer without preimages, so lookup by hash is the accepted fix (inference; Unkey and Langfuse both look up by
 hash with no separate constant-time compare). No primary standard states this explicitly: **not confirmed**.
 If any code compares a hash in application memory (for example, a cached item), use `crypto.timingSafeEqual`.
@@ -133,8 +133,9 @@ attacker who has the DB, which is the threat publishing makes certain. The analy
 entropy argument.
 
 **Real risks (each is a spec point, not a reason to avoid the hash):**
+
 1. **Weak test key.** If the test key is typed by hand (`aik_test123…`) or derived from something guessable, the
-   public hash *is* reversible by guessing. It must come from `randomBytes(32)` like any other key.
+   public hash _is_ reversible by guessing. It must come from `randomBytes(32)` like any other key.
 2. **Hash accepted as a credential.** Any route, script or cache that takes a hash as input (for example
    `?keyHash=`, an admin lookup, or a cache keyed by hash that a client can address) turns the public hash into
    the key. The server must always hash the presented bearer value and never accept a hash from a client.
@@ -149,13 +150,14 @@ entropy argument.
    breaks as soon as environments have different peppers (§5).
 
 **Does committing a hash trip scanners?**
-- *secretlint:* `preset-recommend` is all vendor-specific rules (npm, AWS, GCP, GitHub, GitLab, private keys,
+
+- _secretlint:_ `preset-recommend` is all vendor-specific rules (npm, AWS, GCP, GitHub, GitLab, private keys,
   basic auth, Slack, Stripe, OpenAI, Anthropic …), with no generic entropy or hex rule
   ([secretlint README, Built-in Rules](https://github.com/secretlint/secretlint#built-in-rules)). The nearest is AWS
   secret access key, which needs an `aws_secret_access_key`-style name and exactly 40 base64 chars
   ([aws rule source](https://github.com/secretlint/secretlint/blob/master/packages/%40secretlint/core/src/builtin/rules/aws/index.ts)).
   A 64-char hex hash doesn't match (inference from the regexes; not run).
-- *GitHub secret scanning:* generic patterns are private keys, connection strings, and HTTP Basic/**Bearer**
+- _GitHub secret scanning:_ generic patterns are private keys, connection strings, and HTTP Basic/**Bearer**
   authentication headers. No high-entropy or hash detection; the AI detector covers `password` only
   ([supported patterns](https://docs.github.com/en/code-security/secret-scanning/introduction/supported-secret-scanning-patterns)).
   A hash won't match, but a fixture with a literal `authorization: Bearer <value>` could hit
@@ -174,7 +176,7 @@ survey.
 
 - **HMAC-SHA-256 with a pepper in SSM** (`/ainakupo/<env>/key-pepper`). A committed value is useless without the
   pepper, and a DB-only leak doesn't reveal valid hashes. Costs: an SSM read at cold start (the Lambda can read
-  `/ainakupo/*`), and `keys:add` needs the pepper too. Every environment needs the *same* pepper, or the
+  `/ainakupo/*`), and `keys:add` needs the pepper too. Every environment needs the _same_ pepper, or the
   committed test hashes and the minted keys stop matching; the alternative is computing them per environment. A
   pepper rotation invalidates every key, which means re-minting all episodes' keys, as OWASP notes for passwords.
   With 256-bit keys a DB leak already doesn't enable impersonation, so the gain is small (inference).
@@ -194,18 +196,20 @@ survey.
 **Hash algorithm.** Plain SHA-256, no pepper:
 `keyHash = lowercase_hex(SHA-256(UTF-8(fullKey)))`, where `fullKey` is the whole presented string including the
 `aik_` prefix (as Unkey hashes the full key). That's 64 hex chars, stored as the key item's lookup attribute
-(DynamoDB `GetItem` by `keyHash`). Check the format with a regex *before* hashing, and reject anything that doesn't
+(DynamoDB `GetItem` by `keyHash`). Check the format with a regex _before_ hashing, and reject anything that doesn't
 match with the same 401 as an unknown key, without a DB read. The rate-limit counter is keyed by `keyHash` (or a
 key id), never by plaintext. Never log the key, and log the display suffix rather than the hash. No
 bcrypt/argon2: no benefit at 256 bits, and real cost on the hot path. Optionally add HMAC later. Changing the
 construction means re-minting, so decide now. The recommendation is no.
 
 **Commit the test-key hashes: yes**, in `seed-data.ts` and the spec, because:
+
 - 256-bit random input makes the SHA-256 irreversible (NIST preimage strength 256; 800-63B-4 needs only an
   approved hash at ≥112 bits);
 - neither secretlint's recommended preset nor GitHub secret scanning flags a hex hash;
 - it needs no workflow change (only the owner can commit those) and no pepper plumbing.
-It's uncommon, so the spec should state why it's safe and pin these conditions:
+  It's uncommon, so the spec should state why it's safe and pin these conditions:
+
 1. Test keys are generated from 32 CSPRNG bytes, like real keys, never typed by hand.
 2. The server only ever hashes a presented bearer value. No route, script or cache accepts a hash as a credential.
 3. Production refuses `test-episode` keys. Better: don't seed `test-episode` into production at all. If it is
