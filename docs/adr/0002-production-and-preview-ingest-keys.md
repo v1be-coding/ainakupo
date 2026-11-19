@@ -1,0 +1,3 @@
+# Each sending episode has a production key and a preview key
+
+Episode CI judges traces from its branch environments, so the judge needs their trace text, while visitors' text from a live app should not be stored. One key per episode would force a choice between storing production text and not being able to judge CI traces. So each sending episode gets two ingest keys: a production key that never allows trace text (the server drops any it receives) and a preview key that allows it. The server tags each trace with its key's environment, and the dashboard counts production traces only. Text policy is enforced by the server, not by each sending app's code.
