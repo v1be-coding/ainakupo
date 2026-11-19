@@ -73,5 +73,5 @@ export async function postEvaluation(
   const text = await getTraceText(store(), traceTextTable(), trace.id, now);
   if (!text || (text.prompt === null && text.response === null)) return noText();
 
-  return judgeTrace({ trace, text, ...body, key: check.key });
+  return judgeTrace({ trace, pathId: traceId, text, ...body, key: check.key });
 }
