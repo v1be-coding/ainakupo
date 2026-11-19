@@ -1,5 +1,5 @@
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
-import { loadSummaryRows, type SummaryRows } from "../../db/summary-queries.js";
+import { DAY_MS, loadSummaryRows, type SummaryRows } from "../../db/summary-queries.js";
 import { json, type ApiResult } from "../json.js";
 
 type Figures = {
@@ -19,7 +19,6 @@ type Summary = {
   daily: { date: string; traceCount: number }[];
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const DAYS = 14;
 
 type Sums = {
