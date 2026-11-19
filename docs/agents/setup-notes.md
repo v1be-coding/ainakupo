@@ -4,10 +4,10 @@ What Setup learned that the spec must honour. Each note is a constraint on the s
 
 ## The episode
 
-| Field | Value |
-| --- | --- |
-| Site | `https://ainakupo.emilianocasijr.com` (`SITE_URL`) |
-| Shape | `pages = true`: prerendered pages, clean URLs, a 404 page, and the security headers below |
+| Field     | Value                                                                                                   |
+| --------- | ------------------------------------------------------------------------------------------------------- |
+| Site      | `https://ainakupo.emilianocasijr.com` (`SITE_URL`)                                                      |
+| Shape     | `pages = true`: prerendered pages, clean URLs, a 404 page, and the security headers below               |
 | Anthropic | `anthropic = true`, for evals scored by a Claude judge. See [`calling-claude.md`](../calling-claude.md) |
 
 ## What AInakupo is for
