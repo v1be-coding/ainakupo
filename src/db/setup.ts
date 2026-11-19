@@ -1,11 +1,10 @@
 import { migrate, withRetry } from "@aws/aurora-dsql-drizzle";
 import { sql, type SQL } from "drizzle-orm";
 import { connect } from "./client.js";
-import { notes } from "./schema.js";
-import { seedNotes } from "./seed-data.js";
+import { ingestKeys, sendingEpisodes } from "./schema.js";
+import { seedEpisodes, seedKeys } from "./seed-data.js";
 
 type Admin = ReturnType<typeof connect>;
-type Seed = typeof notes.$inferInsert;
 
 const ROLE_ARN = /^arn:aws:iam::\d{12}:role\/[\w+=,.@-]+$/;
 
@@ -56,11 +55,17 @@ export async function grantAccess(db: Admin, roleArn: string): Promise<void> {
   }
 }
 
-// DO NOTHING, so a repeat never overwrites a row. Never runs on café production (Q44).
-export async function seed(db: Admin, rows: Seed[] = seedNotes): Promise<void> {
-  if (rows.length === 0) return;
+// DO NOTHING, so a repeat never overwrites a row. The deploy runs this on every
+// target, so it skips production itself: test-episode's keys are public test keys.
+export async function seed(db: Admin, target: string = process.env.TARGET ?? ""): Promise<void> {
+  if (!target) throw new Error("TARGET isn't set, so the seed can't tell production apart");
+  if (target === "production") return;
 
-  await db.transactionWithRetry((tx) =>
-    tx.insert(notes).values(rows).onConflictDoNothing({ target: notes.id }),
-  );
+  await db.transactionWithRetry(async (tx) => {
+    await tx
+      .insert(sendingEpisodes)
+      .values(seedEpisodes)
+      .onConflictDoNothing({ target: sendingEpisodes.name });
+    await tx.insert(ingestKeys).values(seedKeys).onConflictDoNothing({ target: ingestKeys.hash });
+  });
 }
