@@ -11,6 +11,7 @@
     "build:db": "esbuild src/db/deploy.ts --bundle --platform=node --target=node24 --format=cjs --external:pg-native --outfile=dist/db/deploy.cjs",
     "build:web": "vite build",
     "build:sdk": "mkdir -p dist/web/sdk && cp src/sdk/ainakupo.ts dist/web/sdk/ainakupo.ts",
+    "keys:add": "esbuild src/keys/cli.ts --bundle --platform=node --target=node24 --format=cjs --external:pg-native --log-level=warning --outfile=dist/keys/add.cjs && node dist/keys/add.cjs",
     "db:generate": "aurora-dsql-drizzle generate --out ./drizzle -- --config drizzle.config.ts",
     "test": "vitest run && node --test '.claude/**/*.test.mjs' 'scripts/*.test.mjs'",
     "typecheck": "tsc --noEmit",
