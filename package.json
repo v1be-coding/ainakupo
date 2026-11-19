@@ -6,10 +6,11 @@
     "node": "24.x"
   },
   "scripts": {
-    "build": "npm run build:api && npm run build:db && npm run build:web",
+    "build": "npm run build:api && npm run build:db && npm run build:web && npm run build:sdk",
     "build:api": "esbuild src/api/handler.ts --bundle --platform=node --target=node24 --format=cjs --external:pg-native --outfile=dist/api/index.js",
     "build:db": "esbuild src/db/deploy.ts --bundle --platform=node --target=node24 --format=cjs --external:pg-native --outfile=dist/db/deploy.cjs",
     "build:web": "vite build",
+    "build:sdk": "mkdir -p dist/web/sdk && cp src/sdk/ainakupo.ts dist/web/sdk/ainakupo.ts",
     "db:generate": "aurora-dsql-drizzle generate --out ./drizzle -- --config drizzle.config.ts",
     "test": "vitest run && node --test '.claude/**/*.test.mjs' 'scripts/*.test.mjs'",
     "typecheck": "tsc --noEmit",
