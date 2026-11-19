@@ -195,3 +195,7 @@ jobs:
       base_url: ${{ needs.deploy.outputs.base_url }}
       frozen_ref: ${{ inputs.frozen_ref }}
       branch_environment: ${{ inputs.environment != 'production' }}
+    # By name, not inherit: the frozen tests get only the test-episode's keys.
+    secrets:
+      TEST_PRODUCTION_KEY: ${{ secrets.TEST_PRODUCTION_KEY }}
+      TEST_PREVIEW_KEY: ${{ secrets.TEST_PREVIEW_KEY }}
