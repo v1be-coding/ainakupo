@@ -1,0 +1,236 @@
+/* Bundled, never inline: the CSP is default-src 'self'. Colours follow the OS
+   through prefers-color-scheme; system fonts only. */
+
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --surface: #f5f6f8;
+  --border: #d9dce1;
+  --text: #1b1e23;
+  --muted: #5a616c;
+  --accent: #2357c6;
+  --bar: #2f6fdf;
+  --error-bg: #fdecec;
+  --error-text: #8f1d1d;
+  --ok-text: #1d6b37;
+  --radius: 8px;
+  --gap: 1rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121418;
+    --surface: #1b1e24;
+    --border: #343a44;
+    --text: #e6e8eb;
+    --muted: #a3aab5;
+    --accent: #8db4ff;
+    --bar: #6f9cf0;
+    --error-bg: #3a1a1c;
+    --error-text: #ffb4b4;
+    --ok-text: #8fd6a5;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+  line-height: 1.5;
+}
+
+body {
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+}
+
+.page {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  min-height: 100vh;
+}
+
+.page-header h1 {
+  margin: 0 0 0.25rem;
+  font-size: 2rem;
+  line-height: 1.2;
+}
+
+.page-header p {
+  margin: 0;
+}
+
+.intro {
+  font-size: 1.0625rem;
+}
+
+.scope,
+.muted {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.notice {
+  margin: 0;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.notice-error {
+  border-color: var(--error-text);
+  background: var(--error-bg);
+  color: var(--error-text);
+}
+
+.empty p {
+  margin: 0;
+}
+
+.empty-title {
+  font-weight: 600;
+}
+
+.data {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.page-footer {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+
+.page-footer p {
+  margin: 0;
+}
+
+/* Totals: five tiles, wrapping to two columns on phones. */
+.tiles {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--gap);
+}
+
+.tile {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.tile-term {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.tile-value {
+  margin: 0.25rem 0 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tile-number {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile-note {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 30rem) {
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Chart: the SVG's geometry is in attributes; only its box and colours are here. */
+.chart {
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.chart-caption {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.chart-bar {
+  fill: var(--bar);
+}
+
+.chart-baseline {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.chart-axis {
+  fill: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Shared by the data state's tables and tiles. */
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
