@@ -82,6 +82,13 @@ describe("DataView", () => {
     expect(html.split("<rect").length - 1).toBe(14);
   });
 
+  it("shows the Sending episodes then the Recent traces table below the chart", () => {
+    const html = render(summary);
+
+    expect(texts(html, "caption")).toEqual(["Sending episodes", "Recent traces"]);
+    expect(html.indexOf("<figure")).toBeLessThan(html.indexOf("<table"));
+  });
+
   it("writes no inline style and no status, alert or empty text", () => {
     const html = render(summary);
 

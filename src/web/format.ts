@@ -32,3 +32,16 @@ export function formatCost(usd: number | null): string {
 export function formatScore(score: number | null): string {
   return score === null ? "no scores" : oneDecimal.format(score);
 }
+
+/** `2026-11-19 14:03:07`, in UTC, from an ISO timestamp. Text that isn't a date is shown as is. */
+export function formatStarted(startedAt: string): string {
+  const date = new Date(startedAt);
+  if (Number.isNaN(date.getTime())) return startedAt;
+  const iso = date.toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 19)}`;
+}
+
+/** `OK` or `Error`: the status in words, never colour alone. */
+export function formatStatus(status: "ok" | "error"): string {
+  return status === "ok" ? "OK" : "Error";
+}
