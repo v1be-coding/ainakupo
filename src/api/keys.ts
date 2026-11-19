@@ -2,6 +2,9 @@ import { createHash } from "node:crypto";
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
 import { findIngestKey, type StoredKey } from "../db/ingest.js";
 import type { KeyEnvironment } from "../db/schema.js";
+import { limitsConfig } from "../limits/config.js";
+import { checkKeyRateLimit } from "../limits/rate-limit.js";
+import { store, type Store } from "../limits/store.js";
 import { json, type ApiResult } from "./json.js";
 
 export type IngestKey = StoredKey;
@@ -28,7 +31,10 @@ const invalidKey = (): KeyCheck => ({
 
 // The one key step both POST routes take, before they read the body. Never logs or
 // returns the key itself.
-export async function authenticate(event: APIGatewayProxyEventV2): Promise<KeyCheck> {
+export async function authenticate(
+  event: APIGatewayProxyEventV2,
+  db: Store = store(),
+): Promise<KeyCheck> {
   const header = event.headers?.authorization;
   if (!header?.startsWith("Bearer ")) return invalidKey();
 
@@ -41,5 +47,30 @@ export async function authenticate(event: APIGatewayProxyEventV2): Promise<KeyCh
   if (stored.environment !== PREFIX_ENVIRONMENT[format[1] ?? ""]) return invalidKey();
   if (process.env.TARGET === "production" && stored.episode === TEST_EPISODE) return invalidKey();
 
+  const limited = await keyRateLimited(stored.hash, db);
+  if (limited) return { ok: false, response: limited };
+
   return { ok: true, key: stored };
+}
+
+// Counts only valid keys, after the per-IP limit in guardRequest has run.
+async function keyRateLimited(keyHash: string, db: Store): Promise<ApiResult | undefined> {
+  try {
+    const result = await checkKeyRateLimit(db, limitsConfig().table, keyHash);
+    if (result.allowed) return undefined;
+    const n = result.retryAfterSeconds;
+    return json(
+      429,
+      {
+        error: "key_rate_limited",
+        message: "Too many requests for this ingest key",
+        retryAfterSeconds: n,
+      },
+      { "retry-after": String(n) },
+    );
+  } catch (error) {
+    // As with the per-IP limit, a broken counter mustn't take ingest down.
+    console.error("Key rate limit check failed", error);
+    return undefined;
+  }
 }
