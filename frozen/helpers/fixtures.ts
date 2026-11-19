@@ -2,7 +2,10 @@ import { test as base, expect, type APIRequestContext, type APIResponse, type Te
 import { API_BUDGET_ANNOTATION, API_CALLS_ANNOTATION } from "./api-calls.js";
 import { limitedEntry } from "./cloudflare.js";
 import { EVIDENCE_ATTACHMENT, EvidenceLog } from "./evidence.js";
+import { sendKeyed, type KeyedResponse } from "./keyed.js";
+import { KEY_PACE, keyCallWait, keyReservationWait, swapPrefix, testKey, untilNextWindow, windowStart, type KeyName } from "./keys.js";
 import { PACE, callWait, reservationWait } from "./pace.js";
+import { loadSdk, type Client, type SdkModule, type SendResult, type TraceInput } from "./sdk.js";
 
 // Tests import `test` and `expect` from here, and the pacing is automatic: each
 // test reserves its API budget before it starts, and every call is paced (Q59).
@@ -42,14 +45,119 @@ function methodOf(property: string, options: unknown): string {
 
 const PACED_METHODS = new Set(["delete", "fetch", "get", "head", "patch", "post", "put"]);
 
-type Options = { allow429: boolean; apiBudget: number };
+// Spec #4's keyed requests. Every call made with a test key, one list per key
+// for the whole run (workers: 1), for the per-key pace.
+const keySent: Record<KeyName, number[]> = { production: [], preview: [] };
+
+async function waitForKeySlot(key: KeyName): Promise<void> {
+  for (let wait = keyCallWait(keySent[key], Date.now()); wait > 0; wait = keyCallWait(keySent[key], Date.now())) {
+    await sleep(wait);
+  }
+}
+
+// A test key by name, or that key's random part under the other prefix.
+export type KeyChoice = KeyName | "preview-under-production-prefix";
+
+export type KeyedPost = {
+  key?: KeyChoice;
+  // Sends the test key as the whole header, without `Bearer `.
+  withoutBearer?: boolean;
+  // A whole `authorization` header for a key that isn't a test key.
+  authorization?: string;
+  json?: unknown;
+  raw?: string;
+  // Only the per-key limit test turns the per-key pace off.
+  perKeyPacing?: boolean;
+};
+
+export type Keyed = {
+  post(path: string, request: KeyedPost): Promise<KeyedResponse>;
+  sdk(): Promise<SdkModule>;
+  // An SDK client for a test key, or for `ingestKey`. The endpoint defaults to the target's origin.
+  client(key: KeyName | { ingestKey: string }, options?: { endpoint?: string; timeoutMs?: number }): Promise<Client>;
+  // One paced, counted SDK send. `key` names the test key the client holds, for the per-key pace.
+  send(client: Client, key: KeyName | null, trace: TraceInput): Promise<SendResult>;
+};
+
+function authorizationFor(request: KeyedPost): string | undefined {
+  const scheme = request.withoutBearer ? "" : "Bearer ";
+  if (request.key === "preview-under-production-prefix") return `${scheme}${swapPrefix(testKey("preview"))}`;
+  if (request.key) return `${scheme}${testKey(request.key)}`;
+  return request.authorization;
+}
+
+type Options = { allow429: boolean; apiBudget: number; keyBudget: number };
 
 export const test = base.extend<
-  Options & { reserve: void; tally: Tally; unpacedRequest: APIRequestContext; apiChecks: void; evidence: EvidenceLog }
+  Options & {
+    reserve: void;
+    tally: Tally;
+    unpacedRequest: APIRequestContext;
+    apiChecks: void;
+    evidence: EvidenceLog;
+    keyed: Keyed;
+    freshKeyWindow: { windowEnd: number };
+  }
 >({
   // Only the test that trips the limit on purpose sets this.
   allow429: [false, { option: true }],
   apiBudget: [DEFAULT_API_BUDGET, { option: true }],
+  // Keyed calls a test may make with each test key. Reserved before it starts,
+  // like apiBudget, so the per-key pace never holds a call back mid-test.
+  keyBudget: [25, { option: true }],
+
+  // Keyed requests through Node's fetch, paced and counted like `request`.
+  keyed: [
+    async ({ baseURL, tally, evidence, keyBudget }, use, testInfo) => {
+      if (!baseURL) throw new Error("BASE_URL is not set.");
+      for (const key of ["production", "preview"] as const) {
+        for (let wait = keyReservationWait(keySent[key], Date.now(), keyBudget); wait > 0; wait = keyReservationWait(keySent[key], Date.now(), keyBudget)) {
+          await sleep(wait);
+        }
+      }
+      const origin = new URL(baseURL).origin;
+      const paced = async <T>(key: KeyName | null, perKeyPacing: boolean, call: () => Promise<T>): Promise<T> => {
+        await waitForSlot(testInfo);
+        tally.calls += 1;
+        if (key && perKeyPacing) await waitForKeySlot(key);
+        if (key) keySent[key].push(Date.now());
+        return call();
+      };
+      const keyed: Keyed = {
+        post: (path, request) => {
+          const key = request.key === "production" || request.key === "preview" ? request.key : null;
+          const url = new URL(path, origin).href;
+          return paced(key, request.perKeyPacing ?? true, async () => {
+            const started = Date.now();
+            const response = await sendKeyed(url, { authorization: authorizationFor(request), json: request.json, raw: request.raw });
+            evidence.finished(url, "POST", response.status, Date.now() - started, response.retryAfter ? { "retry-after": response.retryAfter } : {});
+            return response;
+          });
+        },
+        sdk: () => loadSdk(origin),
+        client: async (key, options = {}) => {
+          const sdk = await loadSdk(origin);
+          const ingestKey = typeof key === "string" ? testKey(key) : key.ingestKey;
+          return sdk.createAInakupo({ endpoint: options.endpoint ?? origin, ingestKey, ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }) });
+        },
+        send: (client, key, trace) => paced(key, true, () => client.send(trace)),
+      };
+      await use(keyed);
+    },
+    { timeout: KEY_PACE.windowMs * 2 + 10_000 },
+  ],
+
+  // Waits for the next UTC minute boundary, plus the per-key margin, so the
+  // per-key limit test starts its burst at the beginning of a server window.
+  // Its own timeout, apart from the test's.
+  freshKeyWindow: [
+    async ({ keyed }, use) => {
+      void keyed;
+      await sleep(untilNextWindow(Date.now()));
+      await use({ windowEnd: windowStart(Date.now()) + KEY_PACE.windowMs });
+    },
+    { timeout: KEY_PACE.windowMs + 10_000 },
+  ],
 
   // Before the test starts, waits until its whole budget fits under PACE, so no
   // call is held back mid-test. The wait has its own timeout, apart from the test's.
