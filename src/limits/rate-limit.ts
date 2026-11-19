@@ -5,15 +5,43 @@ import type { Store } from "./store.js";
 // the frozen smoke check's 240, so that test trips this limit first.
 export const RATE_LIMIT = { requests: 120, windowSeconds: 60 };
 
+// Spec #4: per ingest key, on both POST routes, counted on the key hash.
+const KEY_RATE_LIMIT = { requests: 60, windowSeconds: 60 };
+
+export type RateLimit = typeof RATE_LIMIT;
 export type RateLimitResult = { allowed: true } | { allowed: false; retryAfterSeconds: number };
 
 // A fixed window per IP. Rows expire by themselves through the table's TTL.
-export async function checkRateLimit(
+export function checkRateLimit(
   db: Store,
   table: string,
   ipHash: string,
   now: number = Date.now(),
-  limit = RATE_LIMIT,
+  limit: RateLimit = RATE_LIMIT,
+): Promise<RateLimitResult> {
+  return countInWindow(db, table, `ip#${ipHash}`, now, limit);
+}
+
+// The same fixed window per ingest key hash, in the same table. The `key#` prefix
+// keeps its rows apart from the per-IP ones.
+export function checkKeyRateLimit(
+  db: Store,
+  table: string,
+  keyHash: string,
+  now: number = Date.now(),
+  limit: RateLimit = KEY_RATE_LIMIT,
+): Promise<RateLimitResult> {
+  return countInWindow(db, table, `key#${keyHash}`, now, limit);
+}
+
+// Windows start at multiples of windowSeconds since the epoch, so a 60-second
+// window starts on a UTC minute boundary. Every call counts, refused or not.
+async function countInWindow(
+  db: Store,
+  table: string,
+  counter: string,
+  now: number,
+  limit: RateLimit,
 ): Promise<RateLimitResult> {
   const nowSeconds = Math.floor(now / 1000);
   const windowStart = nowSeconds - (nowSeconds % limit.windowSeconds);
@@ -22,7 +50,7 @@ export async function checkRateLimit(
   const result = await db.send(
     new UpdateItemCommand({
       TableName: table,
-      Key: { pk: { S: `ip#${ipHash}#${windowStart}` } },
+      Key: { pk: { S: `${counter}#${windowStart}` } },
       UpdateExpression: "ADD #count :one SET #expires = if_not_exists(#expires, :expires)",
       ExpressionAttributeNames: { "#count": "count", "#expires": "expires" },
       ExpressionAttributeValues: {
