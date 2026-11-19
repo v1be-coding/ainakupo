@@ -139,6 +139,84 @@ a {
   margin: 0;
 }
 
+/* Totals: five tiles, wrapping to two columns on phones. */
+.tiles {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--gap);
+}
+
+.tile {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.tile-term {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.tile-value {
+  margin: 0.25rem 0 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tile-number {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile-note {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 30rem) {
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Chart: the SVG's geometry is in attributes; only its box and colours are here. */
+.chart {
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.chart-caption {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.chart-bar {
+  fill: var(--bar);
+}
+
+.chart-baseline {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.chart-axis {
+  fill: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Shared by the data state's tables and tiles. */
 .num {
   text-align: right;
