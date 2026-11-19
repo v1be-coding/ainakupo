@@ -441,8 +441,12 @@ describe("POST /api/traces text", () => {
     vi.mocked(putTraceText).mockRejectedValueOnce(new Error("DynamoDB unavailable"));
     const body = newTrace({ prompt: "hi" });
 
-    await expect(post(body, PREV)).rejects.toThrow("DynamoDB unavailable");
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const failed = await post(body, PREV);
+    expect(statusOf(failed)).toBe(500);
+    expect(bodyOf(failed)).toEqual({ error: "internal", message: "Internal error" });
     expect(texts.size).toBe(0);
+    vi.mocked(console.error).mockRestore();
 
     vi.mocked(putTraceText).mockImplementation((_db, _table, id, _startedAt, text) => {
       texts.set(id, text);

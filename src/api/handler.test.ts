@@ -120,6 +120,34 @@ describe("handler", () => {
   });
 
   it.each([
+    ["POST", "/api/traces", postTrace],
+    ["GET", "/api/traces/recent", getRecentTraces],
+    ["POST", `/api/traces/${id}/evaluations`, postEvaluation],
+    ["GET", "/api/summary", getSummary],
+  ] as const)(
+    "answers a JSON 500 when %s %s throws, logging only the error's name",
+    async (method, path, route) => {
+      const secret = "aik_prev_secret-key-and-trace-text";
+      const error = new Error(`query failed: params ${secret}`);
+      error.name = "DatabaseError";
+      vi.mocked(route).mockRejectedValue(error);
+      const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const response = await handler(request(method, path, "{}"));
+
+      expect(response).toMatchObject({
+        statusCode: 500,
+        headers: { "content-type": "application/json" },
+      });
+      expect(bodyOf(response)).toEqual({ error: "internal", message: "Internal error" });
+      expect(log).toHaveBeenCalled();
+      expect(JSON.stringify(log.mock.calls)).toContain("DatabaseError");
+      expect(JSON.stringify(log.mock.calls)).not.toContain(secret);
+      log.mockRestore();
+    },
+  );
+
+  it.each([
     ["GET", "/api/traces"],
     ["PUT", "/api/traces"],
     ["PATCH", "/api/traces"],

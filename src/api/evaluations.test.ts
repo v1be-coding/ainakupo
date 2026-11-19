@@ -14,7 +14,11 @@ vi.mock("../limits/store.js", () => ({
 }));
 vi.mock("../db/ingest.js", () => ({ findIngestKey: vi.fn() }));
 vi.mock("../db/evaluations.js", () => ({ findTrace: vi.fn() }));
-vi.mock("../db/trace-text.js", () => ({ getTraceText: vi.fn(), traceTextTable: () => "text" }));
+vi.mock("../db/trace-text.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../db/trace-text.js")>()),
+  getTraceText: vi.fn(),
+  traceTextTable: () => "text",
+}));
 vi.mock("./judge.js", () => ({ judgeTrace: vi.fn() }));
 
 // Made-up keys in the key format, seeded nowhere but this fake database.

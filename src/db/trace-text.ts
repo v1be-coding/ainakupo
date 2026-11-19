@@ -5,8 +5,9 @@ import type { Store } from "../limits/store.js";
 // A trace's prompt and response. Null means that half wasn't stored.
 export type TraceText = { prompt: string | null; response: string | null };
 
-// ADR-0001: text is gone 30 days after its trace started.
-const KEEP_MS = 30 * 24 * 60 * 60 * 1000;
+// ADR-0001: text is gone 30 days after its trace started, and counts as absent
+// everywhere from then on.
+export const KEEP_MS = 30 * 24 * 60 * 60 * 1000;
 
 // The table's name, which Terraform gives the Lambda. Read on each call, so tests can set it.
 export function traceTextTable(): string {

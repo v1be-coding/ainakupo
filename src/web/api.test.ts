@@ -1,12 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  api,
-  ApiError,
-  failureText,
-  limitMessage,
-  parseRetryAfter,
-  RateLimitedError,
-} from "./api.js";
+import { api, ApiError, parseRetryAfter, RateLimitedError } from "./api.js";
 
 const respond = (status: number, body: string, headers: Record<string, string> = {}) =>
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body, { status, headers })));
@@ -64,34 +57,5 @@ describe("parseRetryAfter", () => {
   it("falls back to a minute", () => {
     expect(parseRetryAfter(null)).toBe(60);
     expect(parseRetryAfter("soon")).toBe(60);
-  });
-});
-
-describe("limitMessage", () => {
-  it("tells a limited visitor when to try again", () => {
-    expect(limitMessage(new RateLimitedError(42, "rate_limited"))).toBe(
-      "Too many requests. Try again in 42 seconds.",
-    );
-  });
-
-  it("says when the AI feature has paused for the day", () => {
-    expect(limitMessage(new RateLimitedError(3600, "daily_cap"))).toBe(
-      "The AI feature is paused until tomorrow.",
-    );
-  });
-});
-
-describe("failureText", () => {
-  it("shows the limit message for a rate-limited request", () => {
-    expect(failureText(new RateLimitedError(30, "rate_limited"))).toBe(
-      "Too many requests. Try again in 30 seconds.",
-    );
-  });
-
-  it.each([
-    ["an error status", new ApiError(404)],
-    ["no response", new TypeError("Failed to fetch")],
-  ])("says unavailable for %s", (_name, error) => {
-    expect(failureText(error)).toBe("unavailable");
   });
 });

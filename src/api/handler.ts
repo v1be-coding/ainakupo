@@ -26,7 +26,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
   const refused = await guardRequest(event);
   if (refused) return refused;
 
-  // The template's health check, kept as it was: any method.
+  // Any method, because the template's health checks rely on it.
   if (event.rawPath === "/api/health") return json(200, { status: "ok" });
 
   for (const route of routes) {
@@ -36,8 +36,25 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     const run = route.methods[event.requestContext.http.method];
     // Before any key or body check, so a wrong method always gets the 405.
     if (!run) return json(405, { error: "method_not_allowed", message: "Method not allowed" });
-    return run(event, match[1] ?? "");
+    return runRoute(run, event, match[1] ?? "");
   }
 
   return json(404, { error: "Not found" });
+}
+
+// A throw (such as a database error) would reach API Gateway as a bare non-JSON 500.
+// Only the error's name is logged: a database error's message can carry query
+// parameters, such as key hashes or trace text.
+async function runRoute(
+  run: RouteHandler,
+  event: APIGatewayProxyEventV2,
+  param: string,
+): Promise<ApiResult> {
+  try {
+    return await run(event, param);
+  } catch (error) {
+    const name = error instanceof Error ? error.name : typeof error;
+    console.error(JSON.stringify({ event: "route_failed", name }));
+    return json(500, { error: "internal", message: "Internal error" });
+  }
 }

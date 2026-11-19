@@ -4,7 +4,10 @@ import { loadSummaryRows, type TraceGroupRow } from "../../db/summary-queries.js
 import { handler } from "../handler.js";
 
 vi.mock("../../limits/guard.js", () => ({ guardRequest: vi.fn() }));
-vi.mock("../../db/summary-queries.js", () => ({ loadSummaryRows: vi.fn() }));
+vi.mock("../../db/summary-queries.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../db/summary-queries.js")>()),
+  loadSummaryRows: vi.fn(),
+}));
 
 const NOW = new Date("2026-11-19T00:30:00.000Z");
 // 2026-11-19 as whole UTC days since the epoch.

@@ -25,7 +25,8 @@ export type SummaryRows = {
   days: DayRow[];
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+// A day number is epoch milliseconds divided by this, floored: the UTC day.
+export const DAY_MS = 24 * 60 * 60 * 1000;
 
 // pg hands back bigint and numeric results as strings.
 const num = (value: unknown): number => (value === null ? 0 : Number(value));

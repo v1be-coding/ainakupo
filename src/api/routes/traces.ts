@@ -9,6 +9,7 @@ import {
 import { store } from "../../limits/store.js";
 import { json, type ApiResult } from "../json.js";
 import { authenticate, type IngestKey } from "../keys.js";
+import { bodyBytes, UUID } from "../request.js";
 
 // A trace as the sender wrote it, once every field has passed its rule.
 type TraceInput = {
@@ -37,7 +38,6 @@ const MAX_COST_USD = 1_000;
 const PAST_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const FUTURE_WINDOW_MS = 5 * 60 * 1000;
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SLUG = /^[a-z0-9-]{1,50}$/;
 // \p{Cc} is C0 (U+0000–U+001F), DEL and C1 (U+0080–U+009F).
 const CONTROL = /\p{Cc}/u;
@@ -88,12 +88,6 @@ const KNOWN_FIELDS = new Set(RULES.map(([field]) => field));
 
 const invalidTrace = (field: string) =>
   json(400, { error: "invalid_trace", field, message: `Invalid trace field: ${field}` });
-
-// The body's raw bytes: the limit counts what the sender sent, not the decoded string.
-function bodyBytes(event: APIGatewayProxyEventV2): Buffer {
-  const raw = event.body ?? "";
-  return event.isBase64Encoded ? Buffer.from(raw, "base64") : Buffer.from(raw, "utf8");
-}
 
 // Turns the body into a trace, or names the first field that breaks its rule.
 function parseTrace(bytes: Buffer, now: number): Parsed {

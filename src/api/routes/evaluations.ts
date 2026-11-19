@@ -1,18 +1,16 @@
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
 import { findTrace } from "../../db/evaluations.js";
-import { getTraceText, traceTextTable } from "../../db/trace-text.js";
+import { getTraceText, KEEP_MS, traceTextTable } from "../../db/trace-text.js";
 import { store } from "../../limits/store.js";
 import { judgeTrace } from "../judge.js";
 import { json, type ApiResult } from "../json.js";
 import { authenticate } from "../keys.js";
+import { bodyText, UUID } from "../request.js";
 
 type Criterion = { criterion: string; description: string };
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CRITERION = /^[a-z-]{1,50}$/;
 const DESCRIPTION_MAX = 1000;
-// Text whose trace started longer ago than this counts as absent (ADR-0001).
-const TEXT_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
 
 const invalidCriterion = () =>
   json(400, {
@@ -22,11 +20,6 @@ const invalidCriterion = () =>
   });
 const traceNotFound = () => json(404, { error: "trace_not_found", message: "Trace not found" });
 const noText = () => json(422, { error: "no_text", message: "Trace has no text to judge" });
-
-function bodyText(event: APIGatewayProxyEventV2): string {
-  const raw = event.body ?? "";
-  return event.isBase64Encoded ? Buffer.from(raw, "base64").toString("utf8") : raw;
-}
 
 // The body exactly as the spec allows it, or null.
 function parseCriterion(text: string): Criterion | null {
@@ -49,8 +42,8 @@ function parseCriterion(text: string): Criterion | null {
   return { criterion, description };
 }
 
-// POST /api/traces/{id}/evaluations: the router calls this only for POST. `traceId` is the
-// raw path segment, not checked to be a UUID.
+// POST /api/traces/{id}/evaluations: the router calls this only for POST, and passes the
+// raw path segment as `traceId`; this function checks it is a UUID.
 export async function postEvaluation(
   event: APIGatewayProxyEventV2,
   traceId: string,
@@ -67,7 +60,7 @@ export async function postEvaluation(
   if (!trace || trace.episode !== check.key.episode) return traceNotFound();
 
   const now = Date.now();
-  if (!trace.hasText || now > trace.startedAt.getTime() + TEXT_KEEP_MS) return noText();
+  if (!trace.hasText || now > trace.startedAt.getTime() + KEEP_MS) return noText();
   // Read by the row's id (Postgres's lowercase form), not the path's, whose case may
   // differ: the text must be stored under the lowercase id too.
   const text = await getTraceText(store(), traceTextTable(), trace.id, now);
