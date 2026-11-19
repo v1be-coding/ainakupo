@@ -12,7 +12,10 @@ import { handler } from "./handler.js";
 import { hashKey } from "./keys.js";
 
 vi.mock("../limits/guard.js", () => ({ guardRequest: vi.fn() }));
-vi.mock("../limits/store.js", () => ({ store: () => ({}) }));
+// The per-key counter, always under its limit here (key-limit.test.ts covers it).
+vi.mock("../limits/store.js", () => ({
+  store: () => ({ send: () => Promise.resolve({ Attributes: { count: { N: "1" } } }) }),
+}));
 vi.mock("../db/trace-text.js", () => ({
   traceTextTable: () => "trace-text",
   putTraceText: vi.fn(),

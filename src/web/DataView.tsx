@@ -1,4 +1,5 @@
 import { DailyChart } from "./DailyChart.js";
+import { EpisodesTable, RecentTracesTable } from "./Tables.js";
 import { Totals } from "./Totals.js";
 import type { RecentTrace, Summary } from "./types.js";
 
@@ -14,11 +15,8 @@ export function DataView({ summary, traces }: DataViewProps) {
     <div className="data" data-state="data">
       <Totals totals={summary.totals} />
       <DailyChart daily={summary.daily} />
-      {/* The Sending episodes and Recent traces tables go here (ticket #18),
-          replacing this placeholder line. */}
-      <p className="muted">
-        {summary.episodes.length} sending episodes, {traces.length} recent traces
-      </p>
+      <EpisodesTable episodes={summary.episodes} />
+      <RecentTracesTable traces={traces} />
     </div>
   );
 }
