@@ -1,31 +1,30 @@
 import { StrictMode, useEffect, useState } from "react";
-import { createRoot } from "react-dom/client";
-import { api, failureText } from "./api.js";
+import { hydrateRoot } from "react-dom/client";
+import { App } from "./App.js";
+import { loadDashboard } from "./load.js";
+import type { PageState } from "./types.js";
+import "./styles.css";
 
-function App() {
-  const [status, setStatus] = useState("checking");
-  const [notesSaved, setNotesSaved] = useState("checking");
+// Starts in the prerendered loading state and loads once: no polling.
+function Dashboard() {
+  const [state, setState] = useState<PageState>({ kind: "loading" });
 
   useEffect(() => {
-    api<{ status: string }>("/api/health")
-      .then((body) => setStatus(body.status))
-      .catch((error: unknown) => setStatus(failureText(error)));
-    api<{ count: number }>("/api/notes/count")
-      .then((body) => setNotesSaved(String(body.count)))
-      .catch((error: unknown) => setNotesSaved(failureText(error)));
+    let current = true;
+    void loadDashboard().then((next) => {
+      if (current) setState(next);
+    });
+    return () => {
+      current = false;
+    };
   }, []);
 
-  return (
-    <main>
-      <h1>V1be Coding</h1>
-      <p>API: {status}</p>
-      <p>Notes saved: {notesSaved}</p>
-    </main>
-  );
+  return <App state={state} />;
 }
 
-createRoot(document.getElementById("root")!).render(
+hydrateRoot(
+  document.getElementById("root")!,
   <StrictMode>
-    <App />
+    <Dashboard />
   </StrictMode>,
 );
