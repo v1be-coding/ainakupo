@@ -87,6 +87,25 @@ resource "aws_dynamodb_table" "limits" {
   }
 }
 
+# Trace text, keyed by trace id. DynamoDB deletes each item once `expires`
+# (startedAt + 30 days) passes, as nothing can schedule a cleanup (ADR-0001).
+# The name stays under v1be-<episode>-*, the prefix CI and the boundary allow.
+resource "aws_dynamodb_table" "trace_text" {
+  name         = "v1be-${var.episode}-trace-text-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "traceId"
+
+  attribute {
+    name = "traceId"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "expires"
+    enabled        = true
+  }
+}
+
 data "aws_iam_policy_document" "assume" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -117,6 +136,11 @@ data "aws_iam_policy_document" "api" {
   statement {
     actions   = ["dynamodb:UpdateItem"]
     resources = [aws_dynamodb_table.limits.arn]
+  }
+
+  statement {
+    actions   = ["dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:DeleteItem"]
+    resources = [aws_dynamodb_table.trace_text.arn]
   }
 
   # Claude without a key (src/ai/claude.ts): an STS token only Anthropic accepts,
@@ -180,6 +204,7 @@ resource "aws_lambda_function" "api" {
       CLUSTER_ENDPOINT  = local.cluster_endpoint
       DB_USER           = "api"
       LIMITS_TABLE      = aws_dynamodb_table.limits.name
+      TRACE_TEXT_TABLE  = aws_dynamodb_table.trace_text.name
       API_ORIGIN_SECRET = local.api_origin_secret
       IP_SOURCE         = local.is_production ? "cloudflare" : "api-gateway"
       EPISODE           = var.episode

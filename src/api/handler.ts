@@ -1,80 +1,60 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
-import { countNotes, getNote, putNote } from "../db/notes.js";
 import { guardRequest } from "../limits/guard.js";
+import { json, type ApiResult } from "./json.js";
+import { postEvaluation } from "./routes/evaluations.js";
+import { getRecentTraces } from "./routes/recent.js";
+import { getSummary } from "./routes/summary.js";
+import { postTrace } from "./routes/traces.js";
 
-const NOTE_PATH = /^\/api\/notes\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
-const MAX_TEXT_LENGTH = 1000;
+type RouteHandler = (event: APIGatewayProxyEventV2, param: string) => Promise<ApiResult>;
+
+interface Route {
+  // A route's single capture group, if any, is passed to its handlers.
+  path: RegExp;
+  methods: Partial<Record<string, RouteHandler>>;
+}
+
+const routes: Route[] = [
+  { path: /^\/api\/traces$/, methods: { POST: (event) => postTrace(event) } },
+  { path: /^\/api\/traces\/recent$/, methods: { GET: (event) => getRecentTraces(event) } },
+  // Any segment reaches the route, so a non-UUID ID gets the route's own answer.
+  { path: /^\/api\/traces\/([^/]+)\/evaluations$/, methods: { POST: postEvaluation } },
+  { path: /^\/api\/summary$/, methods: { GET: (event) => getSummary(event) } },
+];
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const refused = await guardRequest(event);
   if (refused) return refused;
 
-  if (event.rawPath === "/api/health") {
-    return json(200, { status: "ok" });
-  }
+  // Any method, because the template's health checks rely on it.
+  if (event.rawPath === "/api/health") return json(200, { status: "ok" });
 
-  if (event.rawPath === "/api/notes/count") {
-    return countRoute(event);
-  }
+  for (const route of routes) {
+    const match = route.path.exec(event.rawPath);
+    if (!match) continue;
 
-  const id = NOTE_PATH.exec(event.rawPath)?.[1];
-  if (id) {
-    return notesRoute(event, id);
+    const run = route.methods[event.requestContext.http.method];
+    // Before any key or body check, so a wrong method always gets the 405.
+    if (!run) return json(405, { error: "method_not_allowed", message: "Method not allowed" });
+    return runRoute(run, event, match[1] ?? "");
   }
 
   return json(404, { error: "Not found" });
 }
 
-async function countRoute(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
-  if (event.requestContext.http.method !== "GET") {
-    return json(405, { error: "Method not allowed" });
-  }
-  try {
-    return json(200, { count: await countNotes() });
-  } catch (error) {
-    console.error("Couldn't count notes", error);
-    return json(500, { error: "Internal error" });
-  }
-}
-
-async function notesRoute(
+// A throw (such as a database error) would reach API Gateway as a bare non-JSON 500.
+// Only the error's name is logged: a database error's message can carry query
+// parameters, such as key hashes or trace text.
+async function runRoute(
+  run: RouteHandler,
   event: APIGatewayProxyEventV2,
-  id: string,
-): Promise<APIGatewayProxyResultV2> {
-  const method = event.requestContext.http.method;
-
-  if (method === "GET") {
-    const note = await getNote(id);
-    return note ? json(200, note) : json(404, { error: "Not found" });
-  }
-
-  if (method === "PUT") {
-    const text = readText(event.body);
-    if (text === undefined) {
-      return json(400, { error: `text must be 1 to ${MAX_TEXT_LENGTH} characters` });
-    }
-    await putNote(id, text);
-    return json(200, { id, text });
-  }
-
-  return json(405, { error: "Method not allowed" });
-}
-
-function readText(body: string | undefined): string | undefined {
+  param: string,
+): Promise<ApiResult> {
   try {
-    const { text } = JSON.parse(body ?? "") as { text?: unknown };
-    return typeof text === "string" && text.length > 0 && text.length <= MAX_TEXT_LENGTH
-      ? text
-      : undefined;
-  } catch {
-    return undefined;
+    return await run(event, param);
+  } catch (error) {
+    const name = error instanceof Error ? error.name : typeof error;
+    console.error(JSON.stringify({ event: "route_failed", name }));
+    return json(500, { error: "internal", message: "Internal error" });
   }
-}
-
-function json(statusCode: number, body: unknown): APIGatewayProxyResultV2 {
-  return {
-    statusCode,
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  };
 }

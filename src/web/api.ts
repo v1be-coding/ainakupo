@@ -48,15 +48,3 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) throw new ApiError(response.status);
   return (await response.json()) as T;
 }
-
-export function limitMessage(error: RateLimitedError): string {
-  return error.reason === "daily_cap"
-    ? "The AI feature is paused until tomorrow."
-    : `Too many requests. Try again in ${error.retryAfterSeconds} seconds.`;
-}
-
-// What a line on the page shows in place of its value when a call fails: the
-// limit message when rate-limited, otherwise "unavailable".
-export function failureText(error: unknown): string {
-  return error instanceof RateLimitedError ? limitMessage(error) : "unavailable";
-}
