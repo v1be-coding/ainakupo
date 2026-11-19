@@ -12,6 +12,13 @@ import { handler } from "./handler.js";
 import { hashKey } from "./keys.js";
 
 vi.mock("../limits/guard.js", () => ({ guardRequest: vi.fn() }));
+vi.mock("../limits/store.js", () => ({ store: () => ({}) }));
+vi.mock("../db/trace-text.js", () => ({
+  traceTextTable: () => "trace-text",
+  putTraceText: vi.fn(),
+  deleteTraceText: vi.fn(),
+  getTraceText: vi.fn(),
+}));
 vi.mock("../db/ingest.js", () => ({
   findIngestKey: vi.fn(),
   saveTrace: vi.fn(),
