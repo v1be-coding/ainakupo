@@ -1,12 +1,17 @@
 import { renderToString } from "react-dom/server";
-import { App } from "./App.js";
+import { App, NotFound } from "./App.js";
 
 const EMPTY_ROOT = '<div id="root"></div>';
 
-// Run by the build (vite.config.ts): the served page shows the shell and the
+export type Page = "dashboard" | "not-found";
+
+// Run by the build (vite.config.ts): the dashboard shows the shell and the
 // loading status before any script runs, and main.tsx hydrates that markup.
-export function prerender(template: string): string {
-  if (!template.includes(EMPTY_ROOT)) throw new Error(`index.html has no ${EMPTY_ROOT}`);
-  const markup = renderToString(<App state={{ kind: "loading" }} />);
+// The 404 page is complete as built and loads no script.
+export function prerender(template: string, page: Page = "dashboard"): string {
+  if (!template.includes(EMPTY_ROOT)) throw new Error(`the template has no ${EMPTY_ROOT}`);
+  const markup = renderToString(
+    page === "dashboard" ? <App state={{ kind: "loading" }} /> : <NotFound />,
+  );
   return template.replace(EMPTY_ROOT, `<div id="root">${markup}</div>`);
 }
