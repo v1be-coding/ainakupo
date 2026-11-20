@@ -6,7 +6,13 @@ AInakupo lives at `https://ainakupo.emilianocasijr.com`. Its public dashboard sh
 
 ## 1. Get the episode's keys (owner, once)
 
-From this repo, with admin AWS credentials and production's DSQL endpoint:
+Admin logins happen only in Windows Sandbox, which has no Node. So run `v1be-infra`'s wizard there, in Git Bash:
+
+```sh
+/c/code/v1be-infra/sandbox/wizards/ainakupo-keys.sh <episode>
+```
+
+It builds `keys:add` from a pinned commit of this repo, signs you in, finds production's DSQL endpoint, and runs:
 
 ```sh
 CLUSTER_ENDPOINT=<prod-cluster-id>.dsql.ap-southeast-1.on.aws npm run keys:add -- <episode>
@@ -35,7 +41,7 @@ To update it, download it again and review the diff before committing (ADR-0004)
 
 ## 3. Report each AI call from the Lambda
 
-Read the right key from SSM once per container. Use `WithDecryption: true`, and give the Lambda's role `ssm:GetParameter` on `/<episode>/ainakupo/*`. Pass the key in; the SDK won't look for it. Use the production key on production and the preview key on branch environments, so branch traffic stays off the dashboard.
+Read the right key from SSM once per container. Use `WithDecryption: true`. Give the Lambda's role `ssm:GetParameter` on `/<episode>/ainakupo/*`, and `kms:Decrypt` with the conditions `kms:ViaService` = `ssm.ap-southeast-1.amazonaws.com` and `kms:EncryptionContext:PARAMETER_ARN` like that path. The keys are SecureStrings, and AWS requires `kms:Decrypt` to read one decrypted. The episode boundary allows the same since `v1be-infra` #59. `portfolio-site`'s `infra/main.tf` has the statement. Pass the key in; the SDK won't look for it. Use the production key on production and the preview key on branch environments, so branch traffic stays off the dashboard.
 
 ```ts
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
@@ -76,7 +82,7 @@ const result = await (
 if (!result.ok) console.warn("AInakupo trace not stored", result.reason);
 ```
 
-- **Await `send`.** It's one request per trace with a 2-second timeout (`timeoutMs`, 100–10,000), and it doesn't retry. A Lambda may freeze as soon as the handler returns, so an unawaited send can be lost.
+- **Await `send`.** It's one request per trace with a 2-second timeout (`timeoutMs`, 100–10,000), and it doesn't retry. A Lambda may freeze as soon as the handler returns, so an unawaited send can be lost. A cold AInakupo can take over 1.5 s. If you set a shorter `timeoutMs` to stay inside your own Lambda's limit, expect some `timeout` results that AInakupo still stored (`portfolio-site` uses 1 s).
 - **`send` never throws.** Every outcome is a `SendResult`; see the table below. AInakupo being down can't break the feature.
 - **Report failed calls too,** with `status: "error"` and whatever tokens you have (0 is allowed).
 - **`fromAnthropicUsage`** adds cached tokens into `inputTokens`, as the dashboard expects.
