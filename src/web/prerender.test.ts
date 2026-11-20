@@ -38,6 +38,13 @@ describe("prerender", () => {
     expect(html).not.toContain("style=");
   });
 
+  it.each(["index.html", "404.html"])("links the icons from %s", (name) => {
+    const html = readFileSync(new URL(`./${name}`, import.meta.url), "utf8");
+
+    expect(html).toContain('<link rel="icon" href="/favicon.svg" type="image/svg+xml" />');
+    expect(html).toContain('<link rel="apple-touch-icon" href="/apple-touch-icon.png" />');
+  });
+
   it("refuses a template without an empty root", () => {
     expect(() => prerender("<html><body></body></html>")).toThrow(/root/);
   });
