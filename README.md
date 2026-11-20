@@ -7,6 +7,10 @@ Where every V1be Coding episode starts.
 - **Production:** none for the template itself. Setup sets this line to the episode's address, such as `https://<subdomain>.emilianocasijr.com`.
 - **Branch environments:** each ready PR in an episode gets its own address, printed as `Branch environment: <url>` in its `branch / deploy` job log. The template's own PRs deploy nothing: they run `rounds`, `checks` and `green` only.
 
+## Sending traces from another episode
+
+`docs/using-ainakupo.md`: minting an episode's keys, copying the SDK, reporting each AI call from a Lambda, and scoring answers with the judge in CI.
+
 ## Database
 
 Aurora DSQL through `@aws/aurora-dsql-drizzle` (ADR-0003). Change `src/db/schema.ts`, run `npm run db:generate`, then review and commit what lands in `drizzle/`.
