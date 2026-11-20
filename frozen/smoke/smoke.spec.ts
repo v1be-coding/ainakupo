@@ -23,3 +23,21 @@ test("a read reaches the database", async ({ request }) => {
   expect(response.status()).toBe(200);
   expect(((await response.json()) as { daily: unknown[] }).daily).toHaveLength(14);
 });
+
+// The edge maps only S3's 403 to the 404 page, so a missing page gets the HTML
+// page and the API's own JSON 404 reaches the client (v1be-infra #61). Branch
+// edges map it the same way, so both run on branch and production.
+test("an unknown page returns the HTML 404 page", async ({ request }) => {
+  const response = await request.get(`/no-such-page-${crypto.randomUUID()}`);
+
+  expect(response.status()).toBe(404);
+  expect(response.headers()["content-type"]).toMatch(/^text\/html/);
+});
+
+test("an unknown API path returns the API's JSON 404", async ({ request }) => {
+  const response = await request.get(`/api/no-such-path-${crypto.randomUUID()}`);
+
+  expect(response.status()).toBe(404);
+  expect(response.headers()["content-type"]).toContain("application/json");
+  expect(await response.json()).toEqual({ error: "Not found" });
+});
